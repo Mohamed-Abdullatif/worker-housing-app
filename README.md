@@ -95,6 +95,33 @@ Before running this application, ensure you have the following installed:
    pnpm install
    ```
 
+### ⚠️ Important: Native Module Compatibility
+
+This app uses native modules that are **not compatible with Expo Go**. You have two options:
+
+#### Option A: Use Development Build (Full Features) ✅
+```bash
+# Install EAS CLI
+npm install -g eas-cli
+
+# Login to Expo (create account if needed)
+eas login
+
+# Build development client
+eas build --profile development --platform ios    # or android
+
+# Install the generated build on your device
+# Then run: pnpm dev
+```
+
+#### Option B: Use Expo Go (Limited Features) ⚠️
+```bash
+# Run with Expo Go (PDF features will be limited)
+pnpm start
+```
+
+**Note**: In Expo Go, PDF generation uses Expo Print (limited styling) instead of native HTML-to-PDF conversion.
+
 3. **Configure environment variables**
    Create a `.env` file in the root directory:
    ```env
@@ -361,6 +388,23 @@ eas submit
 
 ## 🔧 Troubleshooting
 
+### Native Module Error (Expo Go)
+
+**Error**: `Invariant Violation: Your JavaScript code tried to access a native module that doesn't exist`
+
+**Solutions**:
+1. **Use Development Build** (Recommended):
+   ```bash
+   eas build --profile development --platform ios
+   pnpm dev
+   ```
+
+2. **Or run in Expo Go with limited features**:
+   ```bash
+   pnpm start
+   # PDF features will use Expo Print instead of native modules
+   ```
+
 ### Common Issues
 
 1. **Metro bundler issues**
@@ -378,7 +422,16 @@ eas submit
    cd android && ./gradlew clean
    ```
 
-4. **Notification permissions**
+4. **EAS Build fails**
+   ```bash
+   # Make sure you're logged in
+   eas login
+   
+   # Check project configuration
+   eas config
+   ```
+
+5. **Notification permissions**
    - Ensure proper permissions are requested in app.json
    - Check device notification settings
 

@@ -15,7 +15,7 @@ class ApiService {
         this.initializeAPI();
 
         // Add Reactotron network tracking in dev mode
-        if (__DEV__ && console.tron) {
+        if (__DEV__ && console.tron && typeof console.tron.log === 'function') {
             this.api.interceptors.request.use(request => {
                 console.tron.log('Starting Request:', {
                     url: request.url,

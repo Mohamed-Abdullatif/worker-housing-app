@@ -1,47 +1,29 @@
-import { Platform } from 'react-native';
-import ExpoPDFService from './ExpoPDFService';
+// Expo-compatible PDF service fallback
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
-// Conditional imports for native modules
-let RNBlobUtil, RNHTMLtoPDF;
-
-try {
-    RNBlobUtil = require('react-native-blob-util');
-    RNHTMLtoPDF = require('react-native-html-to-pdf');
-} catch (error) {
-    console.warn('Native PDF modules not available in Expo Go. Falling back to Expo Print service.');
-}
-
-class PDFService {
+class ExpoPDFService {
     constructor() {
-        this.fs = RNBlobUtil?.fs;
-        this.android = Platform.OS === 'android';
-        this.isAvailable = !!(RNBlobUtil && RNHTMLtoPDF);
+        this.isAvailable = true; // Expo modules are always available
     }
 
     async generateInvoicePDF(invoice) {
-        // Use Expo PDF service as fallback
-        if (!this.isAvailable) {
-            console.log('Using Expo PDF service fallback');
-            return await ExpoPDFService.generateInvoicePDF(invoice);
-        }
-
         try {
-            // Create a unique filename without Arabic characters
-            const timestamp = new Date().getTime();
-            const filename = `invoice_${invoice.roomNumber}_${timestamp}`;
-
-            // Create invoice HTML content with improved styling
+            // Create invoice HTML content
             const htmlContent = `
                 <!DOCTYPE html>
                 <html dir="rtl" lang="ar">
                 <head>
                     <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
                     <style>
                         body {
                             font-family: Arial, sans-serif;
                             padding: 20px;
                             color: #333;
                             background-color: #fff;
+                            direction: rtl;
                         }
                         .invoice-header {
                             text-align: center;
@@ -136,7 +118,7 @@ class PDFService {
                         </div>
                         <div class="detail-row">
                             <span><strong>الشهر:</strong></span>
-                            <span>${invoice.month}</span>
+                            <span>${invoice.month || 'غير محدد'}</span>
                         </div>
                         <div class="detail-row">
                             <span><strong>تاريخ الإصدار:</strong></span>
@@ -145,7 +127,7 @@ class PDFService {
                     </div>
 
                     <div class="amount">
-                        <strong>المبلغ الإجمالي:</strong> ${invoice.amount} جنيه
+                        <strong>المبلغ الإجمالي:</strong> ${invoice.amount} ريال
                     </div>
 
                     <div class="section">
@@ -160,7 +142,7 @@ class PDFService {
                     <div class="section">
                         <h2 class="section-title">تفاصيل البنود</h2>
                         <ul class="items-list">
-                            ${invoice.items.map(item => `<li class="item">• ${item}</li>`).join('')}
+                            ${(invoice.items || ['إيجار شهري', 'كهرباء', 'مياه']).map(item => `<li class="item">• ${item}</li>`).join('')}
                         </ul>
                     </div>
 
@@ -172,57 +154,52 @@ class PDFService {
                 </html>
             `;
 
-            // Generate PDF from HTML
-            const options = {
+            // Generate PDF using Expo Print
+            const { uri } = await Print.printToFileAsync({
                 html: htmlContent,
-                fileName: filename,
-                directory: 'Documents',
-                base64: false,
-            };
+                base64: false
+            });
 
-            console.log('Generating PDF...');
-            const file = await RNHTMLtoPDF.convert(options);
-            console.log('PDF generated at:', file.filePath);
+            console.log('PDF generated using Expo Print:', uri);
+            return uri;
 
-            return file.filePath;
         } catch (error) {
-            console.error('Error generating PDF:', error);
+            console.error('Error generating PDF with Expo Print:', error);
             throw error;
         }
     }
 
-    async downloadPDF(url, filename) {
-        // Use Expo PDF service as fallback
-        if (!this.isAvailable) {
-            console.log('Using Expo PDF service fallback for download');
-            return await ExpoPDFService.downloadPDF(url, filename);
-        }
-
+    async sharePDF(uri, filename = 'invoice.pdf') {
         try {
-            const { dirs } = this.fs;
-            const dirToSave = this.android ?
-                dirs.DownloadDir :
-                dirs.DocumentDir;
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri, {
+                    dialogTitle: 'Share Invoice PDF',
+                    mimeType: 'application/pdf'
+                });
+                return { success: true };
+            } else {
+                console.log('Sharing not available');
+                return { success: false, error: 'Sharing not available on this device' };
+            }
+        } catch (error) {
+            console.error('Error sharing PDF:', error);
+            return { success: false, error: error.message };
+        }
+    }
 
-            const filePath = `${dirToSave}/${filename}.pdf`;
+    async downloadPDF(url, filename) {
+        try {
+            const downloadResumable = FileSystem.createDownloadResumable(
+                url,
+                FileSystem.documentDirectory + filename + '.pdf'
+            );
 
-            const configOptions = {
-                fileCache: true,
-                path: filePath,
-                addAndroidDownloads: this.android ? {
-                    useDownloadManager: true,
-                    notification: true,
-                    mediaScannable: true,
-                    title: filename,
-                    description: 'Downloading PDF'
-                } : undefined
-            };
-
-            const response = await RNBlobUtil.config(configOptions).fetch('GET', url);
+            const { uri } = await downloadResumable.downloadAsync();
+            console.log('PDF downloaded to:', uri);
 
             return {
                 success: true,
-                filePath: this.android ? response.path() : filePath
+                filePath: uri
             };
         } catch (error) {
             console.error('Error downloading PDF:', error);
@@ -233,28 +210,9 @@ class PDFService {
         }
     }
 
-    async sharePDF(uri, filename = 'invoice.pdf') {
-        if (!this.isAvailable) {
-            return await ExpoPDFService.sharePDF(uri, filename);
-        }
-
-        // For native implementation, you might want to implement native sharing
-        // For now, just return the file path
-        return { success: true, filePath: uri };
-    }
-
     getFilePath(filename) {
-        if (!this.isAvailable) {
-            return ExpoPDFService.getFilePath(filename);
-        }
-
-        const { dirs } = this.fs;
-        const dirToSave = this.android ?
-            dirs.DownloadDir :
-            dirs.DocumentDir;
-
-        return `${dirToSave}/${filename}.pdf`;
+        return FileSystem.documentDirectory + filename + '.pdf';
     }
 }
 
-export default new PDFService();
+export default new ExpoPDFService();

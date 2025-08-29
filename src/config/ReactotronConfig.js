@@ -1,7 +1,30 @@
-import Reactotron, { networking } from 'reactotron-react-native';
-import { reactotronRedux } from 'reactotron-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeModules } from 'react-native';
+
+// Conditional imports for Reactotron
+let Reactotron, networking, reactotronRedux;
+
+try {
+    const ReactotronRN = require('reactotron-react-native');
+    Reactotron = ReactotronRN.default;
+    networking = ReactotronRN.networking;
+    reactotronRedux = require('reactotron-redux').reactotronRedux;
+} catch (error) {
+    console.warn('Reactotron not available in Expo Go. Debugging features disabled.');
+    // Create mock Reactotron object
+    Reactotron = {
+        setAsyncStorageHandler: () => Reactotron,
+        configure: () => Reactotron,
+        useReactNative: () => Reactotron,
+        use: () => Reactotron,
+        connect: () => Reactotron,
+        onCustomCommand: () => { },
+        log: () => { },
+        error: () => { }
+    };
+    networking = () => { };
+    reactotronRedux = () => { };
+}
 
 // Get host IP for Android emulator
 let scriptHostname = 'localhost';
